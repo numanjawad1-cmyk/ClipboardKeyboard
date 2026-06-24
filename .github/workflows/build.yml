@@ -25,11 +25,12 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build Debug APK
+        working-directory: ClipboardKeyboard
         run: gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ClipboardKeyboard-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ClipboardKeyboard/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
