@@ -24,6 +24,13 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Fix gradle.properties
+        working-directory: ClipboardKeyboard
+        run: |
+          echo "android.useAndroidX=true" >> gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+          echo "android.suppressUnsupportedCompileSdk=35" >> gradle.properties
+
       - name: Build Debug APK
         working-directory: ClipboardKeyboard
         run: gradle assembleDebug
