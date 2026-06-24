@@ -4,8 +4,10 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import androidx.core.widget.doAfterTextChanged
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.clipboardkeyboard.databinding.ClipboardPanelBinding
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -19,6 +21,7 @@ class ClipboardPanelView(
     private val adapter: ClipboardAdapter
     private var selectedIds = mutableSetOf<Long>()
     private var isSelectionMode = false
+    private var observeJob: Job? = null
 
     var onItemPaste: ((String) -> Unit)? = null
 
@@ -31,9 +34,6 @@ class ClipboardPanelView(
                 if (isSelectionMode) {
                     toggleSelection(item.id)
                 } else {
-                    scope.launch {
-                        repository.consumeNextQueueItem()
-                    }
                     onItemPaste?.invoke(item.text)
                 }
             },
@@ -51,17 +51,29 @@ class ClipboardPanelView(
             isSelectionMode = { isSelectionMode }
         )
 
+        binding.rvClipboard.layoutManager = LinearLayoutManager(context)
         binding.rvClipboard.adapter = adapter
 
         setupSearch()
         setupActions()
-        observeItems()
+        observeAllItems()
+    }
+
+    private fun observeAllItems() {
+        observeJob?.cancel()
+        observeJob = scope.launch {
+            repository.getAllItems().collectLatest { items ->
+                adapter.submitList(items)
+                updateEmpty(items.isEmpty())
+            }
+        }
     }
 
     private fun setupSearch() {
         binding.etSearch.doAfterTextChanged { text ->
-            val query = text?.toString() ?: ""
-            scope.launch {
+            val query = text?.toString()?.trim() ?: ""
+            observeJob?.cancel()
+            observeJob = scope.launch {
                 if (query.isBlank()) {
                     repository.getAllItems().collectLatest { items ->
                         adapter.submitList(items)
@@ -81,18 +93,13 @@ class ClipboardPanelView(
         binding.btnClearAll.setOnClickListener {
             scope.launch { repository.clearAll() }
         }
-
         binding.btnDeleteSelected.setOnClickListener {
             scope.launch {
                 repository.deleteItems(selectedIds.toList())
                 exitSelectionMode()
             }
         }
-
-        binding.btnCancelSelection.setOnClickListener {
-            exitSelectionMode()
-        }
-
+        binding.btnCancelSelection.setOnClickListener { exitSelectionMode() }
         binding.btnSelectAll.setOnClickListener {
             val allIds = adapter.currentList.map { it.id }.toSet()
             selectedIds = allIds.toMutableSet()
@@ -101,23 +108,9 @@ class ClipboardPanelView(
         }
     }
 
-    private fun observeItems() {
-        scope.launch {
-            repository.getAllItems().collectLatest { items ->
-                adapter.submitList(items)
-                updateEmpty(items.isEmpty())
-            }
-        }
-    }
-
     private fun toggleSelection(id: Long) {
-        if (selectedIds.contains(id)) {
-            selectedIds.remove(id)
-        } else {
-            selectedIds.add(id)
-        }
-        if (selectedIds.isEmpty()) exitSelectionMode()
-        else updateSelectionToolbar()
+        if (selectedIds.contains(id)) selectedIds.remove(id) else selectedIds.add(id)
+        if (selectedIds.isEmpty()) exitSelectionMode() else updateSelectionToolbar()
         adapter.notifyDataSetChanged()
     }
 
